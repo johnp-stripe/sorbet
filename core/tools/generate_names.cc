@@ -410,7 +410,7 @@ NameDef names[] = {
     {"export_", "export"},
     {"PackageSpec", "PackageSpec", true},
     {"PackageRegistry", "<PackageRegistry>", true},
-    {"PackageMethods", "<PackageMethods>", true},
+    {"PackageTests", "<PackageTests>", true},
 
     // GlobalState initEmpty()
     {"Top", "<top>", true},
@@ -495,6 +495,7 @@ NameDef names[] = {
     {"VERSION", "VERSION", true},
     {"Thread", "Thread", true},
     {"Configuration", "Configuration", true},
+    {"Test", "Test", true},
 };
 
 void emit_name_header(ostream &out, NameDef &name) {
