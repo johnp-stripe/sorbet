@@ -2321,15 +2321,15 @@ void sorbet_throwReturn(VALUE retval) {
 // this function's caller.
 SORBET_INLINE
 enum ruby_tag_type sorbet_initializeTag(struct rb_vm_tag *tag) {
-    rb_execution_context_t *ec = GET_EC();
+    rb_execution_context_t * volatile ec = GET_EC();
 
     // inlined from EC_PUSH_TAG
     tag->state = TAG_NONE;
     tag->tag = Qundef;
     tag->prev = ec->tag;
 
-    int setjmp_retval = RUBY_SETJMP(tag->buf);
     enum ruby_tag_type state = TAG_NONE;
+    int setjmp_retval = RUBY_SETJMP(tag->buf);
 
     if (setjmp_retval) {
         // See rb_ec_tag_state:
