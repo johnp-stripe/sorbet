@@ -120,8 +120,7 @@ public:
         state.tagSize = layout.getTypeStoreSize(tagType);
         //state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
 
-        auto *loadedEC = state.builder.CreateLoad(ecPtr, state.ec, /*isVolatile*/true, "loadedEC");
-        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {loadedEC, state.tag}, "tagState");
+        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {state.ec, state.tag}, "tagState");
         // 0 here is doing double-duty as TAG_NONE but also representing a "normal" return
         // from calling setjmp.
         auto *longjmped = state.builder.CreateICmpNE(state.tagState, builder.getInt32(0));
