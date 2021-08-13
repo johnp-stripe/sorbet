@@ -101,7 +101,7 @@ fi
 if [ -z "$debug" ]; then
   command=( "bazel-bin/compiler/sorbet" )
 else
-  command=( "gdb" "--args" "./bazel-bin/compiler/sorbet" )
+  command=( "${LLDB:-lldb}" "--" "./bazel-bin/compiler/sorbet" )
 fi
 
 command=( "${command[@]}" --silence-dev-message "--compiled-out-dir=$compiled_out_dir" "--llvm-ir-dir=$llvmir" \
