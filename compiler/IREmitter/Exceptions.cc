@@ -58,6 +58,10 @@ class ExceptionState {
     llvm::Value *tagState = nullptr;
     uint64_t tagSize = 0;
 
+    // Execution context cache.
+    llvm::Value *ec = nullptr;
+    llvm::Type *ecPtr = nullptr;
+
     ExceptionState(CompilerState &cs, llvm::IRBuilderBase &builder, const IREmitterContext &irctx, int rubyBlockId,
                    int bodyRubyBlockId, cfg::LocalRef exceptionValue)
         : cs(cs), builder(static_cast<llvm::IRBuilder<> &>(builder)), irctx(irctx), rubyBlockId(rubyBlockId),
@@ -79,6 +83,10 @@ public:
         state.exceptionResultPtr = state.builder.CreateAlloca(llvm::Type::getInt64Ty(cs), nullptr, "exceptionValue");
         auto *tagType = llvm::StructType::getTypeByName(state.cs, "struct.rb_vm_tag");
         state.tag = state.builder.CreateAlloca(tagType, nullptr, "ecTag");
+        auto *ecType = llvm::StructType::getTypeByName(state.cs, "struct.rb_execution_context_struct");
+        auto *ecPtr = ecType->getPointerTo();
+        state.ec = state.builder.CreateAlloca(ecPtr, nullptr, "ecCache");
+        state.ecPtr = ecPtr;
 
         state.builder.restoreIP(ip);
 
@@ -102,6 +110,9 @@ public:
         state.builder.SetInsertPoint(state.exceptionTagStack);
         state.undefFromRegion = state.builder.CreateCall(cs.getFunction("sorbet_rubyUndef"), {}, "undefValue");
 
+        auto *ec = state.builder.CreateCall(cs.getFunction("sorbet_getEC"), {}, "ec");
+        state.builder.CreateStore(ec, state.ec);
+
         // The lifetime of the tag is important; it has to live for the entirety of
         // the exception handling process, but that's not obvious to LLVM based on
         // how we access it.  Make it more obvious; we get miscompilations otherwise.
@@ -109,7 +120,8 @@ public:
         state.tagSize = layout.getTypeStoreSize(tagType);
         state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
 
-        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {state.tag}, "tagState");
+        auto *loadedEC = state.builder.CreateLoad(ecPtr, state.ec, /*isVolatile*/true, "loadedEC");
+        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag2"), {loadedEC, state.tag}, "tagState");
         // 0 here is doing double-duty as TAG_NONE but also representing a "normal" return
         // from calling setjmp.
         auto *longjmped = state.builder.CreateICmpNE(state.tagState, builder.getInt32(0));
@@ -274,7 +286,8 @@ public:
 
         // However we got here, we are done with the entry on the tag stack that
         // we pushed at the start of this process.
-        builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn"), {this->tag});
+        auto *loadedEC = builder.CreateLoad(this->ecPtr, this->ec, /*isVolatile*/true, "loadedEC");
+        builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn2"), {loadedEC, this->tag});
 
         // Tell LLVM we are done with the tag.
         builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
@@ -285,7 +298,7 @@ public:
 
         // We might have arrived at running the ensure via unwinding the call stack.
         // Calling this function will handle resuming that unwind if necessary.
-        builder.CreateCall(this->cs.getFunction("sorbet_maybeContinueUnwind"), {this->tagState});
+        builder.CreateCall(this->cs.getFunction("sorbet_maybeContinueUnwind"), {loadedEC, this->tagState});
 
         // This compare+branch is a little subtle.  If we returned from the body,
         // running the ensure will choose the ensure's result (if it is not undef)

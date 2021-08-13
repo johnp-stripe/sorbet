@@ -2357,6 +2357,28 @@ enum ruby_tag_type sorbet_initializeTag(struct rb_vm_tag *tag) {
 }
 KEEP_ALIVE(sorbet_initializeTag)
 
+SORBET_INLINE
+enum ruby_tag_type sorbet_initializeTag2(rb_execution_context_t *ec, struct rb_vm_tag *tag) {
+    // inlined from EC_PUSH_TAG
+    tag->state = TAG_NONE;
+    tag->tag = Qundef;
+    tag->prev = ec->tag;
+
+    int setjmp_retval = RUBY_SETJMP(tag->buf);
+
+    if (setjmp_retval) {
+        // See rb_ec_tag_state:
+        // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L160-L167
+        return ec_tag_state(VAR_FROM_MEMORY(ec));
+    } else {
+        // See EC_REPUSH_TAG:
+        // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L144
+        ec->tag = tag;
+        return TAG_NONE;
+    }
+}
+KEEP_ALIVE(sorbet_initializeTag2)
+
 // Used by method and static init functions, for setjmp handling for returns from block statements.
 //
 // This is analogous to what comes after return from EC_EXEC_TAG (whether it's the initial setjmp
@@ -2410,9 +2432,14 @@ void sorbet_teardownTagForThrowReturn(struct rb_vm_tag *tag) {
 KEEP_ALIVE(sorbet_teardownTagForThrowReturn)
 
 SORBET_INLINE
-void sorbet_maybeContinueUnwind(enum ruby_tag_type state) {
-    rb_execution_context_t *ec = GET_EC();
+void sorbet_teardownTagForThrowReturn2(rb_execution_context_t *ec, struct rb_vm_tag *tag) {
+    // inlined from EC_POP_TAG
+    ec->tag = tag->prev;
+}
+KEEP_ALIVE(sorbet_teardownTagForThrowReturn2)
 
+SORBET_INLINE
+void sorbet_maybeContinueUnwind(rb_execution_context_t *ec, enum ruby_tag_type state) {
     if (state != TAG_NONE) {
         // inlined from rb_ec_tag_jump
         ec->tag->state = state;
