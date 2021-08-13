@@ -2310,6 +2310,15 @@ void sorbet_throwReturn(VALUE retval) {
     sorbet_ec_jump_tag(ec, ec->tag->state);
 }
 
+# define VAR_FROM_MEMORY(var) __extension__(*(__typeof__(var) volatile *)&(var))
+static SORBET_INLINE enum ruby_tag_type
+ec_tag_state(const rb_execution_context_t *ec)
+{
+    enum ruby_tag_type state = ec->tag->state;
+    ec->tag->state = TAG_NONE;
+    return state;
+}
+
 // This is invoked at the beginning of a method's body, and is analogous to EC_PUSH_TAG + EC_EXEC_TAG
 // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L130-L135
 // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L181-L182
@@ -2321,31 +2330,25 @@ void sorbet_throwReturn(VALUE retval) {
 // this function's caller.
 SORBET_INLINE
 enum ruby_tag_type sorbet_initializeTag(struct rb_vm_tag *tag) {
-    rb_execution_context_t * volatile ec = GET_EC();
+    rb_execution_context_t * ec = GET_EC();
 
     // inlined from EC_PUSH_TAG
     tag->state = TAG_NONE;
     tag->tag = Qundef;
     tag->prev = ec->tag;
 
-    enum ruby_tag_type state = TAG_NONE;
     int setjmp_retval = RUBY_SETJMP(tag->buf);
 
     if (setjmp_retval) {
         // See rb_ec_tag_state:
         // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L160-L167
-        state = ec->tag->state;
-        ec->tag->state = TAG_NONE;
+        return ec_tag_state(VAR_FROM_MEMORY(ec));
     } else {
         // See EC_REPUSH_TAG:
         // https://github.com/ruby/ruby/blob/5445e0435260b449decf2ac16f9d09bae3cafe72/eval_intern.h#L144
         ec->tag = tag;
+        return TAG_NONE;
     }
-
-    // This is subtle, but tags are organized in such a way that TAG_NONE is 0
-    // (i.e. a "normal" return from setjmp) and every other tag is non-zero
-    // (i.e. a "abnormal" return from setjmp).
-    return state;
 }
 KEEP_ALIVE(sorbet_initializeTag)
 
