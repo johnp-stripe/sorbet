@@ -118,9 +118,10 @@ public:
         // how we access it.  Make it more obvious; we get miscompilations otherwise.
         const llvm::DataLayout &layout = cs.module->getDataLayout();
         state.tagSize = layout.getTypeStoreSize(tagType);
-        //state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
+        // state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
 
-        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {state.ec, state.tag}, "tagState");
+        state.tagState =
+            state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {state.ec, state.tag}, "tagState");
         // 0 here is doing double-duty as TAG_NONE but also representing a "normal" return
         // from calling setjmp.
         auto *longjmped = state.builder.CreateICmpNE(state.tagState, builder.getInt32(0));
@@ -285,11 +286,11 @@ public:
 
         // However we got here, we are done with the entry on the tag stack that
         // we pushed at the start of this process.
-        auto *loadedEC = builder.CreateLoad(this->ecPtr, this->ec, /*isVolatile*/true, "loadedEC");
+        auto *loadedEC = builder.CreateLoad(this->ecPtr, this->ec, /*isVolatile*/ true, "loadedEC");
         builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn"), {loadedEC, this->tag});
 
         // Tell LLVM we are done with the tag.
-        //builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
+        // builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
 
         // Run the ensure block with whatever value we have produced by running
         // the body + applicable handlers.
