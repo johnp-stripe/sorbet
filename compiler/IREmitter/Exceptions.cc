@@ -118,7 +118,7 @@ public:
         // how we access it.  Make it more obvious; we get miscompilations otherwise.
         const llvm::DataLayout &layout = cs.module->getDataLayout();
         state.tagSize = layout.getTypeStoreSize(tagType);
-        state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
+        //state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
 
         auto *loadedEC = state.builder.CreateLoad(ecPtr, state.ec, /*isVolatile*/true, "loadedEC");
         state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag2"), {loadedEC, state.tag}, "tagState");
@@ -290,7 +290,7 @@ public:
         builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn2"), {loadedEC, this->tag});
 
         // Tell LLVM we are done with the tag.
-        builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
+        //builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
 
         // Run the ensure block with whatever value we have produced by running
         // the body + applicable handlers.
