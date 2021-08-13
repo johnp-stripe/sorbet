@@ -121,7 +121,7 @@ public:
         //state.builder.CreateLifetimeStart(state.tag, state.builder.getInt64(state.tagSize));
 
         auto *loadedEC = state.builder.CreateLoad(ecPtr, state.ec, /*isVolatile*/true, "loadedEC");
-        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag2"), {loadedEC, state.tag}, "tagState");
+        state.tagState = state.builder.CreateCall(cs.getFunction("sorbet_initializeTag"), {loadedEC, state.tag}, "tagState");
         // 0 here is doing double-duty as TAG_NONE but also representing a "normal" return
         // from calling setjmp.
         auto *longjmped = state.builder.CreateICmpNE(state.tagState, builder.getInt32(0));
@@ -287,7 +287,7 @@ public:
         // However we got here, we are done with the entry on the tag stack that
         // we pushed at the start of this process.
         auto *loadedEC = builder.CreateLoad(this->ecPtr, this->ec, /*isVolatile*/true, "loadedEC");
-        builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn2"), {loadedEC, this->tag});
+        builder.CreateCall(this->cs.getFunction("sorbet_teardownTagForThrowReturn"), {loadedEC, this->tag});
 
         // Tell LLVM we are done with the tag.
         //builder.CreateLifetimeEnd(this->tag, builder.getInt64(this->tagSize));
