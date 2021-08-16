@@ -179,7 +179,8 @@ ast::ExpressionPtr getIteratee(ast::ExpressionPtr &exp) {
 // this applies to each statement contained within a `test_each`: if it's an `it`-block, then convert it appropriately,
 // otherwise flag an error about it
 ast::ExpressionPtr runUnderEach(core::MutableContext ctx, core::NameRef eachName, ast::ExpressionPtr stmt,
-                                ast::MethodDef::ARGS_store &args, ast::ExpressionPtr &iteratee) {
+                                ast::MethodDef::ARGS_store &args, ast::ExpressionPtr &iteratee,
+                                ast::ExpressionPtr &destructureBlock) {
     // this statement must be a send
     if (auto *send = ast::cast_tree<ast::Send>(stmt)) {
         // the send must be a call to `it` with a single argument (the test name) and a block with no arguments
@@ -200,6 +201,14 @@ ast::ExpressionPtr runUnderEach(core::MutableContext ctx, core::NameRef eachName
                 new_args.emplace_back(arg.deepCopy());
             }
             auto blk = ast::MK::Block(send->loc, move(body), std::move(new_args));
+            // if we were sent a desugared destructuring block, copy it into each iteration's block
+            if (destructureBlock != nullptr) {
+                auto *blkSeq = ast::cast_tree<ast::InsSeq>(blk);
+                if (blkSeq) {
+                    blkSeq->emplace_front(destructureBlock.deepCopy());
+                }
+            }
+
             auto each = ast::MK::Send0Block(send->loc, iteratee.deepCopy(), core::Names::each(), move(blk));
             // put that into a method def named the appropriate thing
             auto method = addSigVoid(ast::MK::SyntheticMethod0(send->loc, send->loc, move(name), move(each)));
@@ -215,18 +224,35 @@ ast::ExpressionPtr runUnderEach(core::MutableContext ctx, core::NameRef eachName
     return stmt;
 }
 
+bool isFirstItemADestructureBlock(ast::MethodDef::ARGS_store &args) {
+    if (args.size() != 1) {
+        return false;
+    } else {
+        auto argName = args.front().symbol.name;
+        return argName.rfind(core::Names::destructureArg(), 0) == 0; // Starts with destructure arg tag.
+    }
+}
+
 // this just walks the body of a `test_each` and tries to transform every statement
 ast::ExpressionPtr prepareTestEachBody(core::MutableContext ctx, core::NameRef eachName, ast::ExpressionPtr body,
                                        ast::MethodDef::ARGS_store &args, ast::ExpressionPtr &iteratee) {
     auto *bodySeq = ast::cast_tree<ast::InsSeq>(body);
+    ast::ExpressionPtr *emptyDestructureBlk = nullptr;
     if (bodySeq) {
-        for (auto &exp : bodySeq->stats) {
-            exp = runUnderEach(ctx, eachName, std::move(exp), args, iteratee);
+        if (isFirstItemADestructureBlock(args)) {
+            for (int i = 1; i < bodySeq->stats.size(); i++) {
+                auto &exp = bodySeq->stats[i];
+                exp = runUnderEach(ctx, eachName, std::move(exp), args, iteratee, bodySeq->stats[0]);
+            }
+        } else {
+            for (auto &exp : bodySeq->stats) {
+                exp = runUnderEach(ctx, eachName, std::move(exp), args, iteratee, *emptyDestructureBlk);
+            }
         }
 
-        bodySeq->expr = runUnderEach(ctx, eachName, std::move(bodySeq->expr), args, iteratee);
+        bodySeq->expr = runUnderEach(ctx, eachName, std::move(bodySeq->expr), args, iteratee, *emptyDestructureBlk);
     } else {
-        body = runUnderEach(ctx, eachName, std::move(body), args, iteratee);
+        body = runUnderEach(ctx, eachName, std::move(body), args, iteratee, *emptyDestructureBlk);
     }
 
     return body;
